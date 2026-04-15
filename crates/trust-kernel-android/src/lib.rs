@@ -5,11 +5,11 @@
 //!
 //! Loaded as `librust_kernel_android.so` via System.loadLibrary().
 
-mod bifurcation;
-mod mux_lite;
-mod jis_bridge;
-mod tibet_mint;
-mod triage_level;
+pub mod bifurcation;
+pub mod mux_lite;
+pub mod jis_bridge;
+pub mod tibet_mint;
+pub mod triage_level;
 
 use jni::JNIEnv;
 use jni::objects::{JByteArray, JClass, JString};

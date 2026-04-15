@@ -10,7 +10,11 @@ publish = false
 
 [lib]
 name = "trust_kernel_android"
-crate-type = ["cdylib"]    # .so for Android JNI
+crate-type = ["cdylib", "rlib"]    # cdylib for Android JNI, rlib for test binary
+
+[[bin]]
+name = "trust-kernel-android-test"
+path = "src/bin/smoke_test.rs"
 
 [dependencies]
 jni = "0.21"               # JNI bridge
