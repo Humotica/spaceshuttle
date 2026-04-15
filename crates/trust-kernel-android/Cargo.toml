@@ -1,0 +1,27 @@
+[package]
+name = "trust-kernel-android"
+version = "1.0.0-alpha"
+edition = "2021"
+description = "Trust Kernel for Android — AES-256-GCM Bifurcation, MUX intent routing, TIBET provenance via JNI"
+license = "MIT"
+authors = ["Jasper van de Meent <jasper@humotica.com>", "Root AI <root_idd@humotica.nl>"]
+keywords = ["trust-kernel", "android", "jni", "encryption", "tibet"]
+publish = false
+
+[lib]
+name = "trust_kernel_android"
+crate-type = ["cdylib"]    # .so for Android JNI
+
+[dependencies]
+jni = "0.21"               # JNI bridge
+aes-gcm = "0.10"           # AES-256-GCM (hardware AES-NI / ARMv8 CE)
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+sha2 = "0.10"
+hkdf = "0.12"
+rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+
+# Profile set in workspace root Cargo.toml
+# For standalone Android build: cargo ndk -t aarch64-linux-android build --release

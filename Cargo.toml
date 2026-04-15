@@ -2,6 +2,7 @@
 members = [
     "crates/trust-kernel",
     "crates/store-mmu",
+    "crates/trust-kernel-android",
 ]
 resolver = "2"
 
