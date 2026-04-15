@@ -85,6 +85,8 @@ cargo build --release && \
 
 ## Binaries
 
+### MMU Arena (encrypted memory)
+
 | Binary | What it does | Needs model? |
 |--------|-------------|-------------|
 | `spaceshuttle` | 64-page encrypted memory demo + access control test | No |
@@ -92,6 +94,15 @@ cargo build --release && \
 | `raidtest` | RAM RAID-0 controller with LRU eviction and striping | No |
 | `gguf-shuttle` | Real GGUF model weights through encrypted arena (64MB→1GB) | Yes |
 | `hugepage-shuttle` | 4KB vs 2MB HugePage comparison on GGUF weights | Yes |
+
+### Trust Kernel (dual-kernel pipeline)
+
+| Binary | What it does | Needs model? |
+|--------|-------------|-------------|
+| `tibet-bench` | Bifurcation benchmark: seal/open, session keys, multi-core, entropy | No |
+| `dual-kernel-demo` | Full MUX→Voorproever→Bus→Archivaris→TIBET pipeline, 10K throughput | No |
+| `cluster-paging-demo` | RAM RAID-0 + UPIP fork tokens, cross-machine paging simulation | No |
+| `portmux-xdp-demo` | XDP packet filter + PortMux protocol detection, exploit scanning | No |
 
 ## Crypto Stack
 
