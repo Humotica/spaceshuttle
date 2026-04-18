@@ -20,9 +20,13 @@ features = ["kvm"]
 #   ignition = { git = "https://github.com/nicholasgasior/ignition" }
 
 [features]
-default = ["simulation"]
+default = ["simulation", "cluster", "llm"]
 simulation = []                    # Simulated KVM — for testing without hardware
-kvm = []                           # Real Ignition KVM — requires /dev/kvm + ignition crate
+kvm = []                           # Real Ignition KVM — requires /dev/kvm
+cluster = []                       # Cross-machine RAM RAID-0 + ClusterMux transport
+quic = ["cluster", "dep:quinn", "dep:rustls", "dep:rcgen"]  # QUIC transport — multi-stream, 0-RTT
+llm = ["cluster"]                  # LLM Memory Mapper (DIME aperture) — implies cluster
+full = ["cluster", "llm", "quic"]  # All features
 
 [dependencies]
 userfaultfd = "0.8.1"
@@ -40,6 +44,11 @@ hkdf = "0.12"               # HKDF-SHA256 per-block key derivation
 rand = "0.8"                # OsRng voor nonces en ephemeral keys
 rayon = "1.10"              # Multi-core parallel sealing/opening
 
+# QUIC transport — no head-of-line blocking, multi-stream, 0-RTT
+quinn = { version = "0.11", optional = true }
+rustls = { version = "0.23", optional = true, default-features = false, features = ["ring", "std"] }
+rcgen = { version = "0.13", optional = true }  # Self-signed certs for internal links
+
 # Real KVM backend — when ignition is published to crates.io:
 # ignition = { version = "0.1", optional = true }
 
@@ -56,8 +65,24 @@ name = "cluster-paging-demo"
 path = "src/bin/cluster_paging_demo.rs"
 
 [[bin]]
+name = "cluster-transport-demo"
+path = "src/bin/cluster_transport_demo.rs"
+
+[[bin]]
 name = "portmux-xdp-demo"
 path = "src/bin/portmux_xdp_demo.rs"
+
+[[bin]]
+name = "ram-raid-cluster-demo"
+path = "src/bin/ram_raid_cluster_demo.rs"
+
+[[bin]]
+name = "llm-mapper-demo"
+path = "src/bin/llm_mapper_demo.rs"
+
+[[bin]]
+name = "gguf-raid-test"
+path = "src/bin/gguf_raid_test.rs"
 
 [[bench]]
 name = "airlock_bench"

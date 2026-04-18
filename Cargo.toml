@@ -3,6 +3,7 @@ members = [
     "crates/trust-kernel",
     "crates/store-mmu",
     "crates/trust-kernel-android",
+    "crates/tibet-dgx",
 ]
 resolver = "2"
 

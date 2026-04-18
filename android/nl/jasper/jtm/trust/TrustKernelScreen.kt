@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 
 /**
  * Trust Kernel Demo Screen — Compose UI for hackathon demo.
@@ -27,6 +28,7 @@ fun TrustKernelScreen(
     var output by remember { mutableStateOf("") }
     var manager by remember { mutableStateOf<TrustKernelManager?>(null) }
     var isInitialized by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     // Initialize on first composition
     LaunchedEffect(Unit) {
@@ -114,6 +116,34 @@ fun TrustKernelScreen(
                 modifier = Modifier.weight(1f),
                 enabled = isInitialized
             ) { Text("JIS", fontSize = 12.sp) }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // iPoll Encrypted Messaging
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = {
+                    scope.launch {
+                        output = testIPollSend(manager)
+                    }
+                },
+                modifier = Modifier.weight(1f),
+                enabled = isInitialized
+            ) { Text("iPoll Send", fontSize = 12.sp) }
+
+            Button(
+                onClick = {
+                    scope.launch {
+                        output = testIPollReceive(manager)
+                    }
+                },
+                modifier = Modifier.weight(1f),
+                enabled = isInitialized
+            ) { Text("iPoll Recv", fontSize = 12.sp) }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -234,5 +264,48 @@ private fun testJis(manager: TrustKernelManager?): String {
     val sb = StringBuilder("[JIS] Identity Claim\n")
     val claim = mgr.createClaim("jasper.aint")
     sb.appendLine("  ${claim ?: "FAIL: null"}")
+    return sb.toString()
+}
+
+private suspend fun testIPollSend(manager: TrustKernelManager?): String {
+    val mgr = manager ?: return "[iPoll] ERROR: not initialized"
+    val sb = StringBuilder("[iPoll] Encrypted Send\n")
+
+    val testMsg = "Trust Kernel encrypted iPoll test — ${System.currentTimeMillis()}"
+    sb.appendLine("  Plaintext: \"$testMsg\"")
+
+    val t0 = System.nanoTime()
+    val msgId = mgr.sendEncryptedIPoll(
+        toAgent = "root_idd",
+        plaintext = testMsg,
+        fromAgent = "kit_android"
+    )
+    val elapsed = (System.nanoTime() - t0) / 1_000_000
+
+    if (msgId != null) {
+        sb.appendLine("  Sent: $msgId (${elapsed}ms)")
+        sb.appendLine("  PASS: Bifurcation sealed → base64 → iPoll PUSH")
+    } else {
+        sb.appendLine("  FAIL: send returned null (${elapsed}ms)")
+    }
+    return sb.toString()
+}
+
+private suspend fun testIPollReceive(manager: TrustKernelManager?): String {
+    val mgr = manager ?: return "[iPoll] ERROR: not initialized"
+    val sb = StringBuilder("[iPoll] Encrypted Receive\n")
+
+    val t0 = System.nanoTime()
+    val messages = mgr.receiveEncryptedIPoll("kit_android")
+    val elapsed = (System.nanoTime() - t0) / 1_000_000
+
+    sb.appendLine("  Pulled: ${messages.size} messages (${elapsed}ms)")
+    for (msg in messages.take(5)) {
+        val status = if (msg.decrypted) "DECRYPTED" else "plaintext"
+        sb.appendLine("  [${msg.from}] ($status) ${msg.plaintext.take(60)}")
+    }
+    if (messages.isEmpty()) {
+        sb.appendLine("  (no messages in inbox)")
+    }
     return sb.toString()
 }

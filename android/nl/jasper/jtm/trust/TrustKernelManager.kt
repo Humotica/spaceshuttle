@@ -1,8 +1,14 @@
 package nl.jasper.jtm.trust
 
+import android.util.Base64
 import android.util.Log
 import nl.jasper.jtm.jis.JisKeyManager
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.security.SecureRandom
 
 /**
@@ -20,6 +26,7 @@ class TrustKernelManager private constructor(
         private const val TAG = "TrustKernelMgr"
         private const val SESSION_MESSAGING = "messaging"
         private const val SESSION_FINANCE = "finance"
+        private const val BRAIN_API_URL = "https://brein.jaspervandemeent.nl"
 
         @Volatile
         private var instance: TrustKernelManager? = null
@@ -74,6 +81,127 @@ class TrustKernelManager private constructor(
     fun decryptMessage(sealed: ByteArray): String? {
         val bytes = TrustKernelBridge.open(SESSION_MESSAGING, sealed) ?: return null
         return String(bytes, Charsets.UTF_8)
+    }
+
+    /**
+     * Send an encrypted message via iPoll.
+     * Seals plaintext with Bifurcation → base64 → iPoll PUSH.
+     *
+     * @param toAgent   Recipient .aint agent ID
+     * @param plaintext Message text
+     * @param fromAgent Sender agent ID (default: device DID fingerprint)
+     * @return iPoll message ID on success, null on error
+     */
+    suspend fun sendEncryptedIPoll(
+        toAgent: String,
+        plaintext: String,
+        fromAgent: String? = null
+    ): String? = withContext(Dispatchers.IO) {
+        try {
+            val sealed = encryptMessage(plaintext) ?: return@withContext null
+            val b64Content = Base64.encodeToString(sealed, Base64.NO_WRAP)
+
+            val sender = fromAgent ?: run {
+                val did = jisKeyManager.getOrCreateDID()
+                did.publicKeyHex.take(16)
+            }
+
+            val body = JSONObject().apply {
+                put("from_agent", sender)
+                put("to_agent", toAgent)
+                put("content", b64Content)
+                put("poll_type", "PUSH")
+                put("encrypted", true)
+                put("encryption_method", "bifurcation-aes256gcm")
+            }
+
+            val url = URL("$BRAIN_API_URL/api/ipoll/push")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json")
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                doOutput = true
+            }
+            conn.outputStream.use { it.write(body.toString().toByteArray()) }
+
+            val response = conn.inputStream.bufferedReader().readText()
+            conn.disconnect()
+
+            val result = JSONObject(response)
+            val msgId = result.optString("id", null)
+            Log.i(TAG, "Encrypted iPoll sent to $toAgent: $msgId (${sealed.size} bytes sealed)")
+
+            // Mint TIBET provenance token for the send
+            mintToken("ipoll:encrypted_send:$toAgent")
+
+            msgId
+        } catch (e: Exception) {
+            Log.e(TAG, "Encrypted iPoll send failed", e)
+            null
+        }
+    }
+
+    /**
+     * Pull and decrypt encrypted messages from iPoll inbox.
+     *
+     * @param agentId  Agent ID to pull messages for
+     * @return List of decrypted messages, skipping non-encrypted ones
+     */
+    suspend fun receiveEncryptedIPoll(
+        agentId: String
+    ): List<DecryptedIPollMessage> = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("$BRAIN_API_URL/api/ipoll/pull/$agentId?mark_read=true")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 10_000
+                readTimeout = 10_000
+            }
+            val response = conn.inputStream.bufferedReader().readText()
+            conn.disconnect()
+
+            val json = JSONObject(response)
+            val polls = json.optJSONArray("polls") ?: return@withContext emptyList()
+
+            val messages = mutableListOf<DecryptedIPollMessage>()
+            for (i in 0 until polls.length()) {
+                val poll = polls.getJSONObject(i)
+                val metadata = poll.optJSONObject("metadata")
+                val isEncrypted = metadata?.optBoolean("encrypted", false) ?: false
+
+                if (isEncrypted) {
+                    val b64Content = poll.getString("content")
+                    val sealed = Base64.decode(b64Content, Base64.NO_WRAP)
+                    val plaintext = decryptMessage(sealed)
+
+                    messages.add(DecryptedIPollMessage(
+                        id = poll.optString("id"),
+                        from = poll.optString("from_agent"),
+                        plaintext = plaintext ?: "[DECRYPTION FAILED]",
+                        decrypted = plaintext != null,
+                        timestamp = poll.optString("created_at"),
+                        tibetToken = metadata?.optString("tibet_token")
+                    ))
+                } else {
+                    // Non-encrypted message, pass through as-is
+                    messages.add(DecryptedIPollMessage(
+                        id = poll.optString("id"),
+                        from = poll.optString("from_agent"),
+                        plaintext = poll.optString("content"),
+                        decrypted = false,
+                        timestamp = poll.optString("created_at"),
+                        tibetToken = null
+                    ))
+                }
+            }
+
+            Log.i(TAG, "iPoll pull: ${messages.size} messages (${messages.count { it.decrypted }} encrypted)")
+            messages
+        } catch (e: Exception) {
+            Log.e(TAG, "Encrypted iPoll receive failed", e)
+            emptyList()
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -189,4 +317,13 @@ data class TriageResult(
     val action: String,
     val tibetToken: String?,
     val requiresHumanApproval: Boolean
+)
+
+data class DecryptedIPollMessage(
+    val id: String,
+    val from: String,
+    val plaintext: String,
+    val decrypted: Boolean,
+    val timestamp: String,
+    val tibetToken: String?
 )
