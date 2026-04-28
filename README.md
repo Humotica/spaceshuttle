@@ -1,9 +1,11 @@
-# Spaceshuttle — Encrypted Memory Illusion for AI
+# Spaceshuttle — Encrypted Memory Illusion
 
-**AES-256-GCM encrypted RAM for LLM inference, transparent via hardware MMU traps.**
+**AES-256-GCM encrypted RAM via hardware MMU traps. Identity is the key.**
 
-Page fault → decrypt → decompress → inject → resume. The application sees normal memory.
-Without a valid identity claim: dead material (zero pages). Identity IS the memory.
+Works for any application that touches memory: LLM engines, Redis, PostgreSQL, secrets vaults, browser sandboxes, HSM-style services. The application sees normal memory and merkt niets.
+
+Page fault → identity check → decrypt → decompress → inject → resume.
+Without a valid identity claim: dead material (zero pages).
 
 ## Results (Xeon W-2135 @ 3.70GHz, 2017 hardware)
 
